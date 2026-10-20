@@ -111,6 +111,61 @@ _ = try await api.marketplace.approvePayouts(MarketplacePayoutApproval(ids: payo
 try await api.marketplace.createApprovalPolicy(MarketplaceApprovalPolicyInput(name: "Large orders", minAmount: "1000", currencyId: "TRY", mode: "manual"))
 ```
 
+## Webhooks
+
+Tapsilat signs every callback it sends to your callback URLs, and to an order's `payment_success_url`
+and `payment_failure_url`, with the webhook secret from the panel's callback settings. The
+`Tapsilat-Signature` header looks like `t=1726480000,v1=5257a8…`: `v1` is the hex HMAC-SHA256 of the
+timestamp, a dot and the raw body.
+
+`TapsilatWebhook.verify` checks it in constant time and rejects a timestamp more than 5 minutes from
+the server clock, so a captured callback cannot be replayed. Pass the raw body, not re-encoded JSON.
+
+```swift
+import Tapsilat
+
+/// Handles a callback. `signature` is the request's `Tapsilat-Signature` header
+/// (`TapsilatWebhook.signatureHeader`); returns the HTTP status to answer with.
+func handleCallback(body: Data, signature: String?) -> Int {
+    guard TapsilatWebhook.verify(payload: body, signature: signature, secret: "your_webhook_secret"),
+          let event = try? WebhookEvent(payload: body)
+    else {
+        return 400
+    }
+
+    print(event.type ?? "-")           // "order_lite" (the default), "order", "order_payment_detail", ...
+    print(event.referenceId ?? "-")    // the order's reference ID, whatever the callback type
+    print(event.conversationId ?? "-")
+    print(event.status ?? "-")         // e.g. "Paid", when the callback type carries a status
+
+    if event.isPaid {
+        // fulfil the order
+    }
+    return 200
+}
+```
+
+A different tolerance in seconds can be passed as `tolerance:` (`0` disables the timestamp check),
+and `now:` replaces the current time in tests. A bare hex HMAC-SHA256 of the body, with or without
+a `sha256=` prefix, is still accepted.
+
+### Order Statuses
+
+`OrderStatus.Code` has the numeric status codes that callbacks carry and the names
+`getOrderStatus` returns, and `OrderStatus` has the groups most integrations need:
+
+```swift
+let status = try await api.getOrderStatus(orderReferenceId: "reference-id") // status.status: e.g. "Waiting for payment"
+status.code      // .waitingForPayment (rawValue 7)
+status.isPaid    // false
+
+OrderStatus.isPaid("Completed")     // Paid, Completed, Sub merchant payment approved
+OrderStatus.isFailed("Expired")     // Cancelled, Fraud, Rejected, Failure, Expired, Terminated
+OrderStatus.isRefunded(10)          // Refunded, Partially refunded
+OrderStatus.code("7")               // .waitingForPayment; also accepts 7 or "waiting for payment"
+OrderStatus.Code.failure.name       // "Failure"
+```
+
 ## Modules
 
 - `order`: orders, payments, transactions, charge, refunds and payment terms

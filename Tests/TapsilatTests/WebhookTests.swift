@@ -3,7 +3,7 @@ import XCTest
 @testable import Tapsilat
 
 final class WebhookTests: XCTestCase {
-    // An order_lite callback signed the way admin's monosign.SignWebhook signs it; the expected
+    // An order_lite callback and a known-good Tapsilat-Signature for this body and secret; the expected
     // signature was computed with openssl, independently of the SDK.
     private let payload = #"{"data":{"id":"5f0c6f1e-1111-4a5b-9c1d-2e3f4a5b6c7d","orderReferenceId":"0b6a4f9e-2222-4c3d-8e9f-a1b2c3d4e5f6","conversationId":"wc-1001","status":"3"},"type":"order_lite","token":"9d8c7b6a-3333-4e5f-a6b7-c8d9e0f1a2b3"}"#
     private let secret = "whsec_test"

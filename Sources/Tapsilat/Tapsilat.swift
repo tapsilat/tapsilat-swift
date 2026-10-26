@@ -14,6 +14,7 @@ public final class Tapsilat: @unchecked Sendable {
     public let card: CardService
     public let wallet: WalletService
     public let marketplace: MarketplaceService
+    public let elements: ElementsService
 
     /// Creates a client for `endpoint`, the API v1 base URL. Marketplace calls use API v2,
     /// derived from it. Pass `session` to use your own `URLSession`.
@@ -34,6 +35,7 @@ public final class Tapsilat: @unchecked Sendable {
         self.card = CardService(client: client)
         self.wallet = WalletService(client: client)
         self.marketplace = MarketplaceService(client: client, currencyResolver: currencyResolver)
+        self.elements = ElementsService(client: client)
     }
 
     public static func newAPI(token: String, timeout: TimeInterval = 30) -> Tapsilat {
@@ -138,5 +140,22 @@ public final class Tapsilat: @unchecked Sendable {
     /// endpoints accept units directly, so this is only needed where a UUID is required.
     public func resolveCurrencyId(_ ref: String) async throws -> String {
         try await currencyResolver.resolveCurrencyId(ref)
+    }
+
+    /// Opens a Tapsilat Elements session. Hand the returned `clientSecret` to your app; do not log
+    /// or store it.
+    public func createElementsSession(_ payload: ElementsSessionCreateRequest) async throws -> ElementsSessionWithSecret {
+        try await elements.createElementsSession(payload)
+    }
+
+    /// Returns an Elements session's authoritative state and outcome. Read it on your server
+    /// before fulfilling, rather than trusting what the app reports.
+    public func getElementsSession(id: String) async throws -> ElementsSession {
+        try await elements.getElementsSession(id: id)
+    }
+
+    /// Cancels an Elements session that is still waiting for a card.
+    public func cancelElementsSession(id: String) async throws -> ElementsSession {
+        try await elements.cancelElementsSession(id: id)
     }
 }

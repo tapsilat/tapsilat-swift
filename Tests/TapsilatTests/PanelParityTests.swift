@@ -421,7 +421,7 @@ final class PanelParityTests: XCTestCase {
         }
     }
 
-    func testGRPCErrorsUseTheErrorField() async throws {
+    func testErrorStringWithNumericCodeIsParsed() async throws {
         StubURLProtocol.on("GET", "/api/v2/submerchant-payouts/missing", reply(#"{"error":"payout is not eligible","code":9}"#, status: 424))
 
         do {

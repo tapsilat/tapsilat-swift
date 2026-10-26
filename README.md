@@ -111,6 +111,43 @@ _ = try await api.marketplace.approvePayouts(MarketplacePayoutApproval(ids: payo
 try await api.marketplace.createApprovalPolicy(MarketplaceApprovalPolicyInput(name: "Large orders", minAmount: "1000", currencyId: "TRY", mode: "manual"))
 ```
 
+## Elements Sessions
+
+Tapsilat Elements is the native Android and iOS card sheet. Your server creates a session with its
+secret API key and hands only the session's `clientSecret` to your app, which opens the sheet with
+it. Card data goes from the sheet to Tapsilat encrypted and never reaches your server. These calls
+need the secret API key, so make them from your server, never from the app.
+
+```swift
+let created = try await api.createElementsSession(ElementsSessionCreateRequest(
+    purpose: ElementsSession.purposePay,
+    orderReferenceId: "reference-id",
+    saveCard: true
+))
+// Return created.id and created.clientSecret to your app. Do not log or store the secret.
+
+// Later, read the outcome on your server instead of trusting what the app reports
+let outcome = try await api.getElementsSession(id: "es_test_8Kq2nV0rX4")
+if outcome.status == ElementsSession.statusSucceeded {
+    // fulfil the order; outcome.card has the brand, last4 and expiry
+}
+
+// Cancel a session that is still waiting for a card
+_ = try await api.cancelElementsSession(id: "es_test_8Kq2nV0rX4")
+```
+
+A `pay` session needs `orderReferenceId`. A `tokenize` session (`ElementsSession.purposeTokenize`)
+saves a card for `userId`, with `mode` set to `ElementsSessionCreateRequest.modeSecure` (3D Secure),
+`modeHalfSecure` or `modeNonSecure`. A session that is confirming or has completed comes back
+unchanged from `cancelElementsSession`. Status, purpose and card brand are strings, so values added
+later still decode; compare them with the `ElementsSession.status…` and `ElementsCardSummary.brand…`
+constants.
+
+`clientSecret` is returned only by `createElementsSession`. `print`, `debugPrint`, `dump` and string
+interpolation show it as `[redacted]`; `JSONEncoder` keeps it, so you can send the session to your
+app. Elements errors are thrown as `APIError` with a stable `code` (such as `elements_not_enabled` or
+`session_not_found`) and `retryable`.
+
 ## Webhooks
 
 Tapsilat signs every callback it sends to your callback URLs, and to an order's `payment_success_url`
@@ -176,6 +213,9 @@ OrderStatus.Code.failure.name       // "Failure"
 - `checkout`: card installments, the installment table and order charge
 - `card`: saved cards (tokenization)
 - `marketplace`: sellers, payouts, payout operations and policies (API v2)
+- `elements`: Tapsilat Elements sessions for the native card sheet: `createElementsSession`
+  (`POST /elements/sessions`), `getElementsSession` (`GET /elements/sessions/{id}`) and
+  `cancelElementsSession` (`POST /elements/sessions/{id}/cancel`)
 - `credit`, `wallet`: placeholders
 
 ## Notes
@@ -184,5 +224,7 @@ OrderStatus.Code.failure.name       // "Failure"
 - JSON keys use snake_case conversion to match API payloads.
 - Currency references (a UUID or a unit such as TRY) are sent as given; the server resolves units.
 - API errors are thrown as `APIError` with the HTTP status, the body's `status`, `code` and message,
-  any field `errors`, and the raw body. A response that is not JSON, such as an HTML page from a wrong
-  endpoint, is also an `APIError`.
+  any field `errors`, `retryable`, and the raw body. Elements routes nest the error as
+  `{"error": {"code": "...", "message": "...", "retryable": true}}`; `code`, `messageText` and
+  `retryable` are read from that object. A response that is not JSON, such as an HTML page from a
+  wrong endpoint, is also an `APIError`.
